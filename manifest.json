@@ -4,18 +4,25 @@
   "version": "1.0",
   "description": "Detects if an email is phishing or safe.",
   "permissions": ["activeTab", "scripting", "storage"],
-  "host_permissions": ["https://*/*", "http://*/*"],
+  "host_permissions": ["https://mail.google.com/*", "https://outlook.live.com/*"],
   "content_scripts": [
-      {
-          "matches": ["https://mail.google.com/*", "https://outlook.live.com/*"],
-          "js": ["frontend/content.js"]
-      }
+    {
+      "matches": ["https://mail.google.com/*", "https://outlook.live.com/*"],
+      "js": ["frontend/content.js"],
+      "run_at": "document_idle"
+    }
   ],
   "background": {
-      "service_worker": "frontend/background.js"
+    "service_worker": "frontend/background.js"
   },
   "action": {
-      "default_popup": "frontend/Pop-up UI/popup.html",
-      "default_icon": "Icon_cropped.png"
-  }
+    "default_popup": "frontend/Pop-up UI/popup.html",
+    "default_icon": "frontend/Icon_cropped.png"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["frontend/Icon_cropped.png"],
+      "matches": ["<all_urls>"]
+    }
+  ]
 }
