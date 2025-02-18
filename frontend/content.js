@@ -1,81 +1,110 @@
 console.log("Phisherman Content Script Loaded");
 
-// Function to extract email content
-function getEmails() {
-    let emails = document.querySelectorAll('.zA'); // Gmail's email selector
+// Set to track scanned emails and prevent duplicate scans
+const scannedEmails = new Set();
 
-    if (emails.length === 0) {
-        console.log("No emails found.");
-        return [];
+// Listener to receive messages from popup.js
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.message === "scan_email") {
+        scanEmails();
+        const emailText = document.body.innerText;
+        sendResponse({ emailText });
     }
+});
 
-    let emailData = [];
-    emails.forEach(email => {
-        let subject = email.querySelector('.bog')?.innerText || "No Subject";
-        let sender = email.querySelector('.yX .yW span')?.innerText || "Unknown Sender";
-        let snippet = email.querySelector('.y2')?.innerText || "No Content";
+// Function to flag suspicious emails
+function flagEmail(emailElement) {
+    emailElement.style.border = '2px solid red';
 
-        emailData.push({
-            subject: subject,
-            sender: sender,
-            snippet: snippet
-        });
-    });
-
-    return emailData;
+    const warning = document.createElement('div');
+    warning.innerText = '⚠️ Suspicious Email Detected';
+    warning.style.color = 'red';
+    warning.style.fontWeight = 'bold';
+    warning.style.marginBottom = '5px';
+    emailElement.prepend(warning);
 }
 
-// Function to send email data to backend for phishing detection
-async function checkEmails() {
-    let emails = getEmails();
+// Function to scan emails and send them for phishing detection
+function scanEmails() {
+    console.log("Scanning emails...");
 
-    if (emails.length === 0) {
-        console.log("No emails to scan.");
+    const emailRowSelector = '[role="row"]'; // More reliable selector for Gmail
+    const subjectSelector = '.bog';
+    const senderSelector = '.yX';
+
+    console.log("Using emailRowSelector:", emailRowSelector);
+
+    const emailElements = document.querySelectorAll(emailRowSelector);
+    console.log("Email elements found:", emailElements.length);
+
+    if (emailElements.length === 0) {
+        console.warn("No email elements found. Skipping scan.");
         return;
     }
+    
+    emailElements.forEach(emailElement => {
+        if (!scannedEmails.has(emailElement)) {
+            scannedEmails.add(emailElement);
+            console.log("Scanning email element:", emailElement);
 
-    console.log("Sending emails for phishing detection:", emails);
+            const subjectElement = emailElement.querySelector(subjectSelector);
+            const senderElement = emailElement.querySelector(senderSelector);
+            const bodyElement = document.body;  // Placeholder for email body
 
-    try {
-        let response = await fetch('http://127.0.0.1:5000/detect', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ emails: emails })
-        });
+            if (subjectElement && senderElement && bodyElement) {
+                const emailData = {
+                    subject: subjectElement.innerText || '',
+                    sender: senderElement.innerText || '',
+                    body: bodyElement.innerText || ''
+                };
+                console.log("Extracted Email Data:", emailData);
 
-        let result = await response.json();
-        console.log("Detection Result:", result);
-
-        result.forEach((res, index) => {
-            if (res.isPhishing) {
-                flagEmail(emails[index]);
+                fetch('http://127.0.0.1:5000/predict', {
+                    method: 'POST', 
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(emailData)
+                })
+                .then(response => response.json())
+                .then(result => {
+                    console.log("Server response:", result);
+                    if (result.is_phishing) {
+                        flagEmail(emailElement);
+                    }
+                })
+                .catch(error => console.error('Error connecting to server:', error));
+            } else {
+                console.warn('Could not extract data for an email element.');
             }
-        });
-
-    } catch (error) {
-        console.error("Error communicating with phishing detection server:", error);
-    }
-}
-
-// Function to visually flag phishing emails
-function flagEmail(emailData) {
-    let emails = document.querySelectorAll('.zA');
-
-    emails.forEach(email => {
-        let subject = email.querySelector('.bog')?.innerText;
-        let sender = email.querySelector('.yX .yW span')?.innerText;
-
-        if (emailData.subject === subject && emailData.sender === sender) {
-            email.style.border = '2px solid red';
-            let warning = document.createElement('div');
-            warning.innerText = '⚠️ Suspicious Email Detected';
-            warning.style.color = 'red';
-            email.prepend(warning);
         }
     });
 }
 
-// Run the phishing detection when the page loads
-setTimeout(checkEmails, 5000); // Wait 5 seconds to ensure Gmail loads
+// Function to wait for Gmail's email elements to load before scanning
+function waitForEmailsAndScan(retries = 10) {
+    console.log("Waiting for email elements...");
+
+    let emailElements = document.querySelectorAll('[role="row"]');
+
+    if (emailElements.length === 0 && retries > 0) {
+        console.warn(`No emails found. Retrying in 1s (${retries} left)...`);
+        setTimeout(() => waitForEmailsAndScan(retries - 1), 1000);
+    } else if (emailElements.length > 0) {
+        console.log(`Found ${emailElements.length} emails. Starting scan.`);
+        scanEmails();
+    } else {
+        console.error("No emails found after multiple retries.");
+    }
+}
+
+// Observe changes in the DOM to detect new emails dynamically
+const observer = new MutationObserver((mutations) => {
+    mutations.forEach(() => {
+        scanEmails(); // Re-scan for new emails
+    });
+});
+
+// Start observing Gmail's inbox for changes
+observer.observe(document.body, { childList: true, subtree: true });
+
+// Run scan after Gmail loads (with retries)
+setTimeout(() => waitForEmailsAndScan(), 3000);
