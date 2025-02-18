@@ -24,11 +24,11 @@ function flagEmail(emailElement) {
     emailElement.prepend(warning);
 }
 
-// Function to scan emails and send them for phishing detection
+// Function to scan emails
 function scanEmails() {
     console.log("Scanning emails...");
 
-    const emailRowSelector = '[role="row"]'; // More reliable selector for Gmail
+    const emailRowSelector = '.zA'; // Updated selector for Gmail
     const subjectSelector = '.bog';
     const senderSelector = '.yX';
 
@@ -49,7 +49,7 @@ function scanEmails() {
 
             const subjectElement = emailElement.querySelector(subjectSelector);
             const senderElement = emailElement.querySelector(senderSelector);
-            const bodyElement = document.body;  // Placeholder for email body
+            const bodyElement = document.body;
 
             if (subjectElement && senderElement && bodyElement) {
                 const emailData = {
@@ -79,11 +79,11 @@ function scanEmails() {
     });
 }
 
-// Function to wait for Gmail's email elements to load before scanning
+// Function to wait for Gmail's email elements before scanning
 function waitForEmailsAndScan(retries = 10) {
     console.log("Waiting for email elements...");
 
-    let emailElements = document.querySelectorAll('[role="row"]');
+    let emailElements = document.querySelectorAll('.zA'); // Updated selector
 
     if (emailElements.length === 0 && retries > 0) {
         console.warn(`No emails found. Retrying in 1s (${retries} left)...`);
@@ -96,15 +96,15 @@ function waitForEmailsAndScan(retries = 10) {
     }
 }
 
-// Observe changes in the DOM to detect new emails dynamically
+// Observe changes in Gmail's inbox for dynamic content
 const observer = new MutationObserver((mutations) => {
     mutations.forEach(() => {
         scanEmails(); // Re-scan for new emails
     });
 });
 
-// Start observing Gmail's inbox for changes
+// Start observing Gmail's inbox
 observer.observe(document.body, { childList: true, subtree: true });
 
 // Run scan after Gmail loads (with retries)
-setTimeout(() => waitForEmailsAndScan(), 3000);
+setTimeout(() => waitForEmailsAndScan(), 5000); // Increased delay to 5s
